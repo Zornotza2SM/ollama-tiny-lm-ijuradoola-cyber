@@ -115,5 +115,11 @@ Para completar la práctica, intenta realizar una de estas pruebas:
 
 3. Edita este `README.md` (o crea un archivo `RESPUESTAS.md`) contestando brevemente:
 * ¿Qué modelo has usado finalmente?
+* TinyLLama.
+* 
 * ¿Cuánto ocupa en disco aproximadamente ese modelo? (Búscalo en la web de Ollama).
+* 637MB.
+* 
 * ¿Crees que esta IA responde más rápido o más lento que ChatGPT? ¿Por qué crees que es?
+* La velocidad es normalmente algo mayor, pero no tienen casi lógica las respuestas. Al ser
+* local es algo más rápido; pero ahún así a veces se buggea y va lentísimo.
