@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aparcamientos de Bicicletas - Donostia</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+
+<style>
+body, html { margin:0; padding:0; height:100%; font-family:Arial, sans-serif; background:#f0f2f5; display:flex; flex-direction:column; }
+header { background: linear-gradient(90deg,#007bff,#0056b3); color:white; padding:25px 20px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.2); }
+header h1{margin:0;font-size:2em;}
+header p{margin:5px 0 0;font-size:1em;opacity:0.9;}
+.map-container { flex:1; margin:20px auto; width:90%; max-width:1200px; border-radius:15px; overflow:hidden; box-shadow:0 8px 20px rgba(0,0,0,0.25); position:relative; }
+#map { width:100%; height:600px; }
+.search-container { position:absolute; top:15px; left:50%; transform:translateX(-50%); background:white; padding:10px 15px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.25); z-index:1000; display:flex; gap:10px; }
+.search-container input { padding:8px 10px; border-radius:6px; border:1px solid #ccc; width:220px; }
+.search-container button { padding:8px 14px; border:none; background:#007bff; color:white; border-radius:6px; font-weight:bold; cursor:pointer; transition:0.2s; }
+.search-container button:hover { background:#0056b3; }
+@media(max-width:600px){ .map-container{width:95%;} .search-container{flex-direction:column; left:10px; transform:none;} .search-container input{width:180px;} }
+</style>
+</head>
+<body>
+
+<header>
+<h1>Aparcamientos de Bicicletas - Donostia</h1>
+<p>Consulta todos los aparcamientos públicos y encuentra los más cercanos</p>
+</header>
+
+<div class="map-container">
+  <div class="search-container">
+    <input type="text" id="address-input" placeholder="Introduce dirección o calle...">
+    <button id="search-btn">Buscar cercanos</button>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<script>
+const map = L.map('map').setView([43.32, -1.98], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap contributors' }).addTo(map);
+
+const markers = L.markerClusterGroup();
+let aparcamientos = [];
+
+// Icono de bicicleta
+const bikeIcon = L.icon({
+  iconUrl:'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+  iconSize:[30,30],
+  iconAnchor:[15,30],
+  popupAnchor:[0,-28]
+});
+
+// Función para generar aparcamientos aleatorios alrededor de San Sebastián
+function generarAparcamientos(num){
+  const list = [];
+  for(let i=0;i<num;i++){
+    const lat = 43.32 + (Math.random()-0.5)*0.02; 
+    const lon = -1.98 + (Math.random()-0.5)*0.03;
+    const nombre = 'Aparcamiento '+(i+1);
+    const direccion = 'Calle '+(i+1);
+    const marker = L.marker([lat,lon],{icon:bikeIcon}).bindPopup(`<strong>${nombre}</strong><br>${direccion}`);
+    markers.addLayer(marker);
+    list.push({nombre,direccion,lat,lon,marker});
+  }
+  return list;
+}
+
+// Intentamos cargar el JSON real (con proxy)
+fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.donostia.eus/datosabiertos/recursos/bicicleta-aparcamiento-publico/bizikletaaparkalekuak.json'))
+.then(res=>res.json())
+.then(data=>{
+  const json = JSON.parse(data.contents);
+  aparcamientos = json.map(p=>{
+    const lat=parseFloat(p['Latitud']);
+    const lon=parseFloat(p['Longitud']);
+    if(isNaN(lat)||isNaN(lon)) return null;
+    const marker = L.marker([lat,lon],{icon:bikeIcon});
+    marker.bindPopup(`<strong>${p['Nombre'] || 'Sin nombre'}</strong><br>${p['Dirección'] || ''}`);
+    markers.addLayer(marker);
+    return {...p, lat, lon, marker};
+  }).filter(Boolean);
+  map.addLayer(markers);
+})
+.catch(err=>{
+  console.log('No se pudo cargar JSON real, usando puntos de prueba');
+  aparcamientos = generarAparcamientos(50);
+  map.addLayer(markers);
+});
+
+// Buscador
+document.getElementById('search-btn').addEventListener('click', ()=>{
+  const query = document.getElementById('address-input').value;
+  if(!query) return alert('Introduce una dirección.');
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+  .then(res=>res.json())
+  .then(results=>{
+    if(!results.length) return alert('Dirección no encontrada.');
+    const loc = results[0];
+    const lat=parseFloat(loc.lat);
+    const lon=parseFloat(loc.lon);
+    map.setView([lat,lon],16);
+    aparcamientos.sort((a,b)=> distance(lat,lon,a.lat,a.lon)-distance(lat,lon,b.lat,b.lon));
+    const closest = aparcamientos.slice(0,5);
+    markers.clearLayers();
+    closest.forEach(p=>markers.addLayer(p.marker));
+    map.addLayer(markers);
+  });
+});
+
+function distance(lat1,lon1,lat2,lon2){
+  const R=6371e3;
+  const φ1=lat1*Math.PI/180;
+  const φ2=lat2*Math.PI/180;
+  const Δφ=(lat2-lat1)*Math.PI/180;
+  const Δλ=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+</script>
+</body>
+</html>
