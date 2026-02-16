@@ -1,4 +1,4 @@
-**Título del Proyecto.**
+**Título del Proyecto:**
 Donostia Bike Parking
 
 **Descripción del problema:**
