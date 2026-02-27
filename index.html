@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Chat Local IA</title>
+    <style>
+        /* Estilos básicos tipo WhatsApp */
+        body { font-family: sans-serif; background-color: #e5ddd5; margin: 0; display: flex; justify-content: center; height: 100vh; }
+        #chat-container { width: 100%; max-width: 600px; background: white; display: flex; flex-direction: column; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        #header { background-color: #075e54; color: white; padding: 15px; text-align: center; font-weight: bold; }
+        #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        
+        /* Burbujas de chat */
+        .message { padding: 10px 15px; border-radius: 10px; max-width: 80%; line-height: 1.4; }
+        .user { align-self: flex-end; background-color: #dcf8c6; border-bottom-right-radius: 0; }
+        .bot { align-self: flex-start; background-color: #f1f0f0; border-bottom-left-radius: 0; }
+        
+        /* Zona de input */
+        #input-area { display: flex; padding: 10px; background: #f0f0f0; }
+        input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; outline: none; }
+        button { margin-left: 10px; padding: 10px 20px; background-color: #075e54; color: white; border: none; border-radius: 20px; cursor: pointer; }
+        button:hover { background-color: #128c7e; }
+        button:disabled { background-color: #ccc; }
+    </style>
+</head>
+<body>
+
+    <div id="chat-container">
+        <div id="header">🤖 IA Local (TinyLlama)</div>
+        <div id="messages">
+            <div class="message bot">Hola, soy tu IA local. ¿En qué puedo ayudarte?</div>
+        </div>
+        <div id="input-area">
+            <input type="text" id="userInput" placeholder="Escribe tu mensaje..." onkeypress="handleEnter(event)">
+            <button id="sendBtn" onclick="sendMessage()">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:11434/api/generate";
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        async function sendMessage() {
+            const inputField = document.getElementById("userInput");
+            const sendBtn = document.getElementById("sendBtn");
+            const messagesDiv = document.getElementById("messages");
+            const userText = inputField.value.trim();
+
+            if (!userText) return;
+
+            // 1. Mostrar mensaje del usuario
+            addMessage(userText, "user");
+            inputField.value = "";
+            inputField.disabled = true;
+            sendBtn.disabled = true;
+
+            // 2. Crear burbuja de "Pensando..."
+            const loadingId = addMessage("Pensando...", "bot");
+
+            try {
+                // 3. Llamada a la API de Ollama (Fetch)
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        model: "tinyllama", // Asegúrate de que este modelo esté descargado
+                        prompt: userText,
+                        stream: false // Importante: esperamos la respuesta completa, no por trozos
+                    })
+                });
+
+                const data = await response.json();
+                
+                // 4. Reemplazar "Pensando..." por la respuesta real
+                const botBubble = document.getElementById(loadingId);
+                botBubble.innerText = data.response; // Ollama devuelve el texto en el campo "response"
+
+            } catch (error) {
+                document.getElementById(loadingId).innerText = "Error: No puedo conectar con Docker.";
+                console.error(error);
+            } finally {
+                inputField.disabled = false;
+                sendBtn.disabled = false;
+                inputField.focus();
+            }
+        }
+
+        function addMessage(text, sender) {
+            const messagesDiv = document.getElementById("messages");
+            const bubble = document.createElement("div");
+            const id = "msg-" + Date.now();
+            bubble.id = id;
+            bubble.classList.add("message", sender);
+            bubble.innerText = text;
+            messagesDiv.appendChild(bubble);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll abajo
+            return id;
+        }
+    </script>
+</body>
+</html>
